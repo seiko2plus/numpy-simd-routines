@@ -1,0 +1,152 @@
+/* Fully custom dark theme over Tabulator's structural (base) stylesheet — the
+   palette and typography from the original viewer, recreated so nothing fights
+   a bundled theme. */
+
+:root {
+  --page:      #0d0d0d;
+  --surface:   #1a1a19;
+  --ink:       #ffffff;
+  --ink-2:     #c3c2b7;
+  --muted:     #898781;
+  --grid:      #2c2c2a;
+  --border:    rgba(255, 255, 255, 0.10);
+  --accent:    #3987e5;   /* magnitude bars */
+  --good:      #35c956;
+  --bad:       #e0564f;
+  --good-wash: rgba(53, 201, 86, 0.12);
+  --bad-wash:  rgba(224, 86, 79, 0.12);
+  --sans:      system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:      ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  padding: 1.5rem;
+  max-width: 82rem;
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.45 var(--sans);
+}
+h1 { font-size: 1.25rem; margin: 0 0 0.25rem; font-weight: 650; }
+.meta { color: var(--ink-2); margin: 0 0 0.25rem; }
+.hint { color: var(--muted); margin: 0 0 1rem; font-size: 0.85rem; }
+#dropzone { margin: 1rem 0; color: var(--muted); }
+
+/* ---- facet pills (filtering; keeps the table header clean) ---- */
+
+.filters { margin: 0 0 1rem; }
+.facet { display: flex; align-items: baseline; gap: 0.5rem; margin: 0.3rem 0; }
+.facet .name {
+  color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.04em; min-width: 5.5rem;
+}
+.facet .pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.pill {
+  border: 1px solid var(--grid); border-radius: 999px;
+  background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 0.8rem; padding: 0.1rem 0.7rem; cursor: pointer;
+}
+.pill[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---- Tabulator: dark surface, our borders, single (browser) scrollbar ---- */
+
+.tabulator {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink);
+  font: 14px/1.45 var(--sans);
+}
+.tabulator, .tabulator .tabulator-tableholder { height: auto !important; max-height: none !important; }
+.tabulator .tabulator-tableholder { overflow: visible !important; }
+
+.tabulator .tabulator-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  color: var(--muted);
+}
+.tabulator .tabulator-header .tabulator-col {
+  background: var(--surface);
+  border-right: none;
+}
+.tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 0.5rem 0.75rem; }
+.tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 650;
+}
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable.tabulator-col-sorter-element:hover,
+.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover {
+  background-color: var(--page) !important; /* match the row hover, not the base gray */
+}
+.tabulator .tabulator-col .tabulator-arrow { border-bottom-color: var(--muted) !important; }
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-arrow,
+.tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-arrow { border-bottom-color: var(--ink) !important; }
+
+.tabulator .tabulator-row,
+.tabulator .tabulator-row.tabulator-row-even { background: var(--surface); }
+.tabulator .tabulator-row { border-top: 1px solid var(--grid); }
+.tabulator .tabulator-row:first-child { border-top: none; }
+.tabulator .tabulator-row.tabulator-selectable:hover,
+.tabulator .tabulator-row.tabulator-selected:hover,
+.tabulator .tabulator-row:hover { background-color: var(--page) !important; }
+.tabulator .tabulator-row .tabulator-cell {
+  color: var(--ink);
+  border: none;
+  padding: 0.5rem 0.75rem;
+}
+.tabulator-cell.mono { font-family: var(--mono); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+
+/* ---- badges (fma / status) ---- */
+
+.badge {
+  display: inline-block;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.05rem 0.45rem;
+}
+.badge.pass { color: var(--good); background: var(--good-wash); }
+.badge.fail { color: var(--bad); background: var(--bad-wash); }
+.badge.fma  { color: var(--ink-2); border: 1px solid var(--border); font-weight: 400; }
+
+/* ---- max-error magnitude bar ---- */
+
+.bar-wrap { display: flex; align-items: center; gap: 0.6rem; }
+.bar-wrap .mono {
+  min-width: 3.4rem; text-align: right;
+  font-family: var(--mono); font-size: 0.9em; font-variant-numeric: tabular-nums;
+}
+.bar {
+  flex: 1; height: 6px; min-width: 30px; max-width: 4.2rem;
+  border-radius: 4px; background: var(--grid); overflow: hidden;
+}
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.bar > i.over { background: var(--bad); }
+
+/* ---- expandable detail panel (value over bits, like the old viewer) ---- */
+
+.detail {
+  flex: 0 0 100%;
+  padding: 0.55rem 0.85rem 0.8rem;
+  background: var(--page);
+  border-top: 1px solid var(--grid);
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
+.detail .sub { width: 100%; border-collapse: collapse; }
+.detail .sub th {
+  text-align: left; color: var(--muted); font-weight: 650;
+  text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.04em;
+}
+.detail .sub th.num, .detail .sub td.num { text-align: right; }
+.detail .sub th, .detail .sub td { padding: 0.2rem 0.7rem; white-space: nowrap; vertical-align: top; }
+.detail .sub td { font-family: var(--mono); color: var(--ink); }
+.detail .v { display: block; }
+.detail .bits { display: block; color: var(--muted); }
+.detail .over td { color: var(--bad); }
+.detail .sub-h { color: var(--muted); margin: 0.6rem 0 0.25rem; font-family: var(--mono); }

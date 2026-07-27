@@ -1,0 +1,9 @@
+[wrap-git]
+directory = svml
+url = https://github.com/numpy/SVML.git
+revision = main
+depth = 1
+patch_directory = svml
+
+[provide]
+svml = svml_dep

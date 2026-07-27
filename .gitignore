@@ -1,24 +1,12 @@
-# Temporary #
-#############
-.cache
-.direnv
+__pycache__/
+/.cache/
+/build-install/
+/ulp-report.html
+/ulp-report.js
+/ulp-report.json
 
-# Compiled source #
-###################
-*.a
-*.dll
-*.exe
-*.o
-*.o.d
-*.py[ocd]
-*.so
-*.mod
-
-# Logs #
-########
-*.log
-
-# Patches #
-###########
-*.patch
-*.diff
+# meson subprojects: track the wrap manifests and the packagefile overlays
+# they graft onto upstream checkouts; ignore the checkouts themselves.
+/subprojects/*
+!/subprojects/*.wrap
+!/subprojects/packagefiles/

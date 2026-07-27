@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPSR ULP report</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tabulator-tables@6.5.2/dist/css/tabulator.min.css">
+<link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+
+<h1>NPSR ULP report</h1>
+<p id="meta" class="meta"></p>
+<p class="hint">toggle the facet pills to narrow rows; click a row for its
+   per-test breakdown and worst offenders (value + IEEE bits)</p>
+
+<section id="filters" class="filters"></section>
+
+<section id="dropzone" hidden>
+  <p>No report loaded. Run the test suite, then reopen this page &mdash;
+     or drop a <code>ulp-report.json</code> here.</p>
+  <input type="file" id="file-input" accept=".json,.js">
+</section>
+
+<div id="grid"></div>
+
+<!-- Data sources, strongest first: inline slot (filled by `spin ulp-report`),
+     .js sidecar (404s harmlessly when absent), drag-and-drop fallback. -->
+<script type="application/json" id="ulp-data"></script>
+<script src="../../ulp-report.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.5.2/dist/js/tabulator.min.js"></script>
+<script src="viewer.js"></script>
+</body>
+</html>

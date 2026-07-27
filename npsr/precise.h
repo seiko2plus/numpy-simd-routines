@@ -68,6 +68,13 @@ class FPExceptions {
 #else
   static constexpr auto kUnderflow = 0;
 #endif
+#ifdef FE_INEXACT
+  static constexpr auto kInexact = FE_INEXACT;
+#else
+  static constexpr auto kInexact = 0;
+#endif
+  // kInexact is deliberately excluded: nearly every rounded operation raises
+  // it, so it carries no error signal for Raise()/Test() callers.
   static constexpr auto kAll = kInvalid | kDivByZero | kOverflow | kUnderflow;
 
   void Raise(int errors) noexcept { mask_ |= errors; }

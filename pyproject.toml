@@ -7,10 +7,60 @@ version = "1.0.0.dev0"
 description = "NumPy SIMD Routines"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+# `spin test -j <n>` needs xdist; the plugin merges the workers' results itself.
+test = ["pytest", "pytest-xdist"]
+
+[tool.ruff]
+# Python style + lint: run `ruff check` and `ruff format`. 88 cols matches the
+# width the current sources are written at. Build outputs, vendored subprojects
+# and throwaway *_backup.py scratch files are excluded.
+line-length = 88
+extend-exclude = ["build", "build-install", "subprojects", "*_backup.py"]
+
+[tool.ruff.lint]
+# Bugs (F/B), style (E/W), imports (I), modernization (UP), simplify (SIM),
+# comprehensions (C4), and ruff's own checks (RUF).
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
+
+[tool.pyright]
+# Static type check for the package (run `pyright`); analyses the source tree
+# without a build. The package installs as `numpy_sr` (meson subdir) but the
+# source folder is `python/`, so absolute self-imports (`import numpy_sr`) are
+# resolved against the built package under build-install/. That path carries the
+# interpreter version, so bump the list when the Python minor changes.
+include = ["python"]
+exclude = [
+  "**/__pycache__",
+  "**/*_backup.py",
+  "build",
+  "build-install",
+  "subprojects",
+]
+extraPaths = [
+  "build-install/usr/lib/python3.12/site-packages",
+  "build-install/usr/lib/python3.13/site-packages",
+]
+pythonVersion = "3.12"
+# The _numpy_sr extension is compiled-only and resolved via its .pyi stub;
+# silence the "stub found without a source module" note that follows.
+reportMissingModuleSource = "none"
+
 [tool.spin]
 package = "numpy_sr"
 
 [tool.spin.commands]
+"Build" = [
+  "spin.cmds.meson.build",
+]
 "Codegen" = [
   ".spin/cmds.py:sollya",
+]
+"Testing" = [
+  ".spin/cmds.py:test",
+  ".spin/cmds.py:ulp_report",
+]
+"Environments" = [
+  "spin.cmds.meson.python",
+  "spin.cmds.meson.ipython",
 ]
