@@ -212,7 +212,7 @@ NPSR_INTRIN V Extended(V x) {
   // PHASE 7: Convert to Radians
   // =============================================================================
 
-  // Multiply by π with error compensation (Cody-Waite multiplication)
+  // Multiply by 2π with error compensation (Cody-Waite multiplication)
   constexpr auto kPiMul2 = data::kPiMul2<T>;
   const V pi2_hi = Set(d, kPiMul2[0]);
   const V pi2_med = Set(d, kPiMul2[1]);
@@ -233,6 +233,14 @@ NPSR_INTRIN V Extended(V x) {
     r_lo = Combine(d, DemoteTo(dh, r_lo_w0), DemoteTo(dh, r_lo_w1));
     r_w0 = BitCast(d, r0);
     r_w1 = BitCast(d, r1);
+  } else if constexpr (!kNativeFMA) {
+    // Without FMA, `MulSub(pi2_hi, n, r)` yields zero and drops the 0.5-ulp(r)
+    // rounding error of r — worth 0.5 ulp of the result near k*pi/2. Recover
+    // it from the exact head product (head - r is exact by Sterbenz).
+    V head, rest;
+    SplitMul(pi2_hi, n, head, rest);
+    r_lo = Add(Sub(head, r), rest);
+    r_lo = Add(Mul(pi2_med, n), r_lo);
   } else {
     r_lo = MulSub(pi2_hi, n, r);
     r_lo = MulAdd(pi2_med, n, r_lo);
@@ -272,22 +280,30 @@ NPSR_INTRIN V Extended(V x) {
   // =============================================================================
   // PHASE 10: Final Assembly
   // =============================================================================
-  V res_lo = NegMulAdd(func_hi, r, deriv);
-  res_lo = MulAdd(res_lo, r_lo, func_lo);
   V res_hi_lo = MulAdd(sigma, r, func_hi);
-  V res_hi = MulAdd(deriv_hi, r, res_hi_lo);
-
+  V res_hi, deriv_hi_r_cor;
+  if constexpr (!kNativeFMA && !kIsSingle) {
+    // Same substitution as in Phase 7. sigma is a signed power of two (see
+    // approx.h) so sigma*r is exact, but deriv_hi*r would round under a
+    // decayed MulAdd and corrupt the head; SplitMul recovers it.
+    V dr, dr_rest;
+    SplitMul(deriv_hi, r, dr, dr_rest);
+    res_hi = Add(res_hi_lo, dr);
+    V dr_hi = Sub(res_hi, res_hi_lo);
+    deriv_hi_r_cor = Add(Sub(dr, dr_hi), dr_rest);
+  } else {
+    res_hi = MulAdd(deriv_hi, r, res_hi_lo);
+    deriv_hi_r_cor = MulAdd(deriv_hi, r, Sub(res_hi_lo, res_hi));
+  }
   V sum_cor = MulAdd(sigma, r, Sub(func_hi, res_hi_lo));
-  V deriv_hi_r_cor = MulAdd(deriv_hi, r, Sub(res_hi_lo, res_hi));
-  deriv_hi_r_cor = Add(deriv_hi_r_cor, sum_cor);
-  res_lo = Add(res_lo, deriv_hi_r_cor);
+  V res_lo0 = Add(deriv_hi_r_cor, sum_cor);
 
   // Polynomial corrections
   V s2 = Set(d, kIsSingle ? 0x1.1110b8p-7f : 0x1.1110fabb3551cp-7);
   V s1 = Set(d, kIsSingle ? -0x1.555556p-3f : -0x1.5555555554448p-3);
   V sin_poly = MulAdd(s2, r2, s1);
-  sin_poly = Mul(sin_poly, r);
   sin_poly = Mul(sin_poly, r2);
+  sin_poly = Mul(sin_poly, r);
 
   V c1 = Set(d, kIsSingle ? 0x1.5554f8p-5f : 0x1.5555555554ccfp-5);
   const V neg_half = Set(d, static_cast<T>(-0.5));
@@ -301,8 +317,11 @@ NPSR_INTRIN V Extended(V x) {
   }
   cos_poly = Mul(cos_poly, r2);
 
-  res_lo = MulAdd(sin_poly, deriv, res_lo);
-  res_lo = MulAdd(cos_poly, func_hi, res_lo);
+  V corr = NegMulAdd(func_hi, r, deriv);
+  V res_lo_rlo = MulAdd(corr, r_lo, func_lo);
+  V res_lo_sin = MulAdd(deriv, sin_poly, res_lo0);
+  V res_lo_cos = MulAdd(func_hi, cos_poly, res_lo_sin);
+  V res_lo = Add(res_lo_cos, res_lo_rlo);
   return Add(res_hi, res_lo);
 }
 // NOLINTNEXTLINE(google-readability-namespace-comments)

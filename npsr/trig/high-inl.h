@@ -95,15 +95,16 @@ NPSR_INTRIN V High(V x) {
 /**
  * This function computes sin(x) or cos(x) for |x| < 2^24 using the Cody-Waite
  * reduction algorithm combined with table lookup and polynomial approximation,
- * achieves < 1 ULP error for |x| < 2^24.
+ * achieves <= 1 ULP error for |x| < 2^24 (worst case reaches, but does not
+ * exceed, 1 ULP).
  *
  * Algorithm Overview:
  * 1. Range Reduction: Reduces input x to r where |r| < π/16
  *    - Computes n = round(x * 16/π) and r = x - n*π/16
- *    - Uses multi-precision arithmetic (3 parts of π/16) for accuracy
+ *    - Uses multi-word π/16 (3 words with FMA, 4 without) for accuracy
  *
  * 2. Table Lookup: Retrieves precomputed sin(n*π/16) and cos(n*π/16)
- *    - Includes high and low precision parts for cos values
+ *    - Stores high and low parts for both sin and cos (lows packed 32:32)
  *
  * 3. Polynomial Approximation: Computes sin(r) and cos(r)
  *    - sin(r) ≈ r * (1 + r²*P_sin(r²)) where P_sin is a minimax polynomial
@@ -142,17 +143,16 @@ NPSR_INTRIN V High(V x) {
   // Note: cos_lo and sin_lo are packed together (32 bits each) to save memory.
   // cos_lo can be used as-is since it's in the upper bits, sin_lo needs
   // extraction. The precision loss is negligible for the final result.
-  // see data/lut-inl.h.sol for the table generation code.
+  // see data/kpi16-inl.h.sol for the table generation code.
   V sin_lo = BitCast(d, ShiftLeft<32>(BitCast(du, cos_lo)));
 
   // Step 3: Multi-precision computation of remainder r
   // r = x - n*(π/16)_high
+  // Without native FMA the non-tail parts carry 27/25/29 bits, so the two
+  // leading products n*part are exact for |n| < ceil(2^24*16/π) = 85445660.
+  // part2 and the tail round, but the idioms below capture that rounding.
   constexpr auto kPiDiv16Prec29 = data::kPiDiv16Prec29<kNativeFMA>;
   V r_hi = NegMulAdd(n, Set(d, kPiDiv16Prec29[0]), x);
-  if constexpr (!kNativeFMA) {
-    // For F64, we need to handle the low precision part separately
-    r_hi = NegMulAdd(n, Set(d, kPiDiv16Prec29[3]), r_hi);
-  }
   const V pi16_med = Set(d, kPiDiv16Prec29[1]);
   const V pi16_lo = Set(d, kPiDiv16Prec29[2]);
   V r_med = NegMulAdd(n, pi16_med, r_hi);
@@ -162,6 +162,15 @@ NPSR_INTRIN V High(V x) {
   V term = NegMulAdd(pi16_med, n, Sub(r_hi, r_med));
   V r_lo = MulAdd(pi16_lo, n, Sub(r, r_med));
   r_lo = Sub(term, r_lo);
+  if constexpr (!kNativeFMA) {
+    // Fourth piece (48 bits at 2^-91). Reusing the one rounded product in both
+    // the subtraction and its error capture keeps (r, r_lo) an exact
+    // double-double even when r is tiny near k*π/2.
+    const V tail_prod = Mul(n, Set(d, kPiDiv16Prec29[3]));
+    const V r_prev = r;
+    r = Sub(r_prev, tail_prod);
+    r_lo = Add(r_lo, Sub(Sub(r_prev, r), tail_prod));
+  }
 
   // Step 4: Polynomial approximation
   V r2 = Mul(r, r);
@@ -210,13 +219,23 @@ NPSR_INTRIN V High(V x) {
   if constexpr (OP == Operation::kCos) {
     // Cosine reconstruction: cos_table - sin_table*remainder
     // Equivalent to: cos(a)*cos(r) - sin(a)*sin(r) but more efficient
-    V res_hi = NegMulAdd(r, sin_hi, cos_hi);  // cos_hi - r*sin_hi
+    V res_hi, r_sin_low;
+    if constexpr (kNativeFMA) {
+      res_hi = NegMulAdd(r, sin_hi, cos_hi);  // cos_hi - r*sin_hi
 
-    // This captures the precision lost in the main computation
-    V r_sin_hi = Sub(cos_hi, res_hi);  // Extract high part of multiplication
+      // This captures the precision lost in the main computation
+      V r_sin_hi = Sub(cos_hi, res_hi);  // Extract high part of multiplication
 
-    // Handles rounding errors and adds sin_low contribution
-    V r_sin_low = MulSub(r, sin_hi, r_sin_hi);  // Compute multiplication error
+      // Handles rounding errors and adds the low-part contribution
+      r_sin_low = MulSub(r, sin_hi, r_sin_hi);  // Compute multiplication error
+    } else {
+      // Dekker split stands in for the FMA idiom
+      V r_sin, r_sin_rest;
+      SplitMul(r, sin_hi, r_sin, r_sin_rest);
+      res_hi = Sub(cos_hi, r_sin);
+      V r_sin_hi = Sub(cos_hi, res_hi);
+      r_sin_low = Add(Sub(r_sin, r_sin_hi), r_sin_rest);
+    }
     V sin_low_corr = MulAdd(r, sin_lo, r_sin_low);  // Add sin_low term
 
     // This is used to apply the low-precision remainder correction
@@ -245,13 +264,23 @@ NPSR_INTRIN V High(V x) {
   } else {
     // Sine reconstruction: sin_table + cos_table*remainder
     // Equivalent to: sin(a)*cos(r) + cos(a)*sin(r) but more efficient
-    V res_hi = MulAdd(r, cos_hi, sin_hi);  // sin_hi + r*cos_hi
+    V res_hi, r_cos_low;
+    if constexpr (kNativeFMA) {
+      res_hi = MulAdd(r, cos_hi, sin_hi);  // sin_hi + r*cos_hi
 
-    // This captures the precision lost in the main computation
-    V r_cos_hi = Sub(res_hi, sin_hi);  // Extract high part of multiplication
+      // This captures the precision lost in the main computation
+      V r_cos_hi = Sub(res_hi, sin_hi);  // Extract high part of multiplication
 
-    // Handles rounding errors and adds cos_low contribution
-    V r_cos_low = MulSub(r, cos_hi, r_cos_hi);  // Compute multiplication error
+      // Handles rounding errors and adds the low-part contribution
+      r_cos_low = MulSub(r, cos_hi, r_cos_hi);  // Compute multiplication error
+    } else {
+      // Dekker split stands in for the FMA idiom
+      V r_cos, r_cos_rest;
+      SplitMul(r, cos_hi, r_cos, r_cos_rest);
+      res_hi = Add(sin_hi, r_cos);
+      V r_cos_hi = Sub(res_hi, sin_hi);
+      r_cos_low = Add(Sub(r_cos, r_cos_hi), r_cos_rest);
+    }
     V cos_low_corr = MulAdd(r, cos_lo, r_cos_low);  // Add cos_low term
 
     // Intermediate term for r_low correction: cos_table - sin_table*r

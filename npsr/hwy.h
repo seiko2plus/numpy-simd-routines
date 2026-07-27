@@ -32,7 +32,23 @@ using hn::TFromV;
 using hn::VFromD;
 constexpr bool kNativeFMA = HWY_NATIVE_FMA != 0;
 
-inline HWY_ATTR void DummyToSuppressUnusedWarning() {}
+// Dekker split product for targets without native FMA, where the
+// `MulSub(a, b, a*b)` error idiom degenerates to zero. Masking to 26-bit heads
+// makes `head` exact, so a*b == head + rest (rest rounded at ~2^-105).
+template <typename V, HWY_IF_F64(TFromV<V>)>
+NPSR_INTRIN void SplitMul(V a, V b, V& head, V& rest) {
+  using namespace hn;
+  const DFromV<V> d;
+  const RebindToUnsigned<decltype(d)> du;
+  const V mask = BitCast(d, Set(du, 0xFFFFFFFFF8000000u));
+  const V a_hi = And(a, mask);
+  const V a_lo = Sub(a, a_hi);
+  const V b_hi = And(b, mask);
+  const V b_lo = Sub(b, b_hi);
+  head = Mul(a_hi, b_hi);
+  rest = MulAdd(a_hi, b_lo, Mul(a_lo, b));
+}
+
 }  // namespace npsr::HWY_NAMESPACE
 HWY_AFTER_NAMESPACE();
 

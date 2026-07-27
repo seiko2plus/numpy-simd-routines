@@ -56,13 +56,17 @@ NPSR_INTRIN V PolyLow(V r, V r2) {
   using namespace hn;
 
   const DFromV<V> d;
-  const V c15 = Set(d, -0x1.9f1517e9f65fp-41);
-  const V c13 = Set(d, 0x1.60e6bee01d83ep-33);
-  const V c11 = Set(d, -0x1.ae6355aaa4a53p-26);
-  const V c9 = Set(d, 0x1.71de3806add1ap-19);
-  const V c7 = Set(d, -0x1.a01a019a659ddp-13);
-  const V c5 = Set(d, 0x1.111111110a573p-7);
-  const V c3 = Set(d, -0x1.55555555554a8p-3);
+  // Both ops fit sin(r) on the same interval, so the two coefficient sets
+  // differ only in trailing bits; each matches its SVML counterpart
+  // (__svml_sin_d_la / __svml_cos_d_la) bit-for-bit.
+  constexpr bool kCos = OP == Operation::kCos;
+  const V c15 = Set(d, kCos ? -0x1.9f0d60811aac8p-41 : -0x1.9f1517e9f65fp-41);
+  const V c13 = Set(d, kCos ? 0x1.60e6857a2f220p-33 : 0x1.60e6bee01d83ep-33);
+  const V c11 = Set(d, kCos ? -0x1.ae63546002231p-26 : -0x1.ae6355aaa4a53p-26);
+  const V c9 = Set(d, kCos ? 0x1.71de38030fea0p-19 : 0x1.71de3806add1ap-19);
+  const V c7 = Set(d, kCos ? -0x1.a01a019a5b87bp-13 : -0x1.a01a019a659ddp-13);
+  const V c5 = Set(d, kCos ? 0x1.111111110a4a8p-7 : 0x1.111111110a573p-7);
+  const V c3 = Set(d, kCos ? -0x1.55555555554a7p-3 : -0x1.55555555554a8p-3);
   V poly = MulAdd(c15, r2, c13);
   poly = MulAdd(r2, poly, c11);
   poly = MulAdd(r2, poly, c9);
@@ -110,26 +114,28 @@ NPSR_INTRIN V Low(V x) {
     //   N' = N - 0.5
     n = Sub(n, Set(d, static_cast<T>(0.5)));
   }
-  // Use Cody-Waite method with triple-precision PI
+  // Cody-Waite reduction with multi-word π (3 words with FMA, 4 without)
   constexpr auto kPi = data::kPi<T, kNativeFMA>;
-
   V r = NegMulAdd(n, Set(d, kPi[0]), x_abs);
   r = NegMulAdd(n, Set(d, kPi[1]), r);
   V r_lo = NegMulAdd(n, Set(d, kPi[2]), r);
+
   if constexpr (!kNativeFMA) {
-    if (!kIsSingle) {
-      r = r_lo;
-    }
     r_lo = NegMulAdd(n, Set(d, kPi[3]), r_lo);
   }
-
-  if constexpr (kIsSingle) {
+  if constexpr (kIsSingle || !kNativeFMA) {
+    // The polynomial needs the fully reduced value; r still owes the last
+    // π word(s).
     r = r_lo;
   }
+
   V r2 = Mul(r, r);
   V poly = PolyLow<OP>(r, r2);
 
   if constexpr (!kIsSingle) {
+    // Non-FMA has r == r_lo, giving the plain r + r³·poly. With FMA this is
+    // r_lo·(1 + r²·poly) ≈ sin(r_lo): r and r_lo differ by n·π[2] (~2^-83)
+    // and sin(r)/r varies slowly, so the error stays sub-ULP.
     V r2_corr = Mul(r2, r_lo);
     poly = MulAdd(r2_corr, poly, r_lo);
   }
