@@ -13,7 +13,8 @@ using std::is_same_v;
 // These allow compile-time configuration without runtime overhead
 
 // Algorithm configuration tags
-// Skip extended precision for |x| > 2^24 (float) or 2^53 (double)
+// Skip extended precision for large |x| (> 10^4 float, > 2^24 double; see
+// trig/inl.h)
 struct _NoLargeArgument {};
 // Skip checks for NaN, Inf, and other special values
 struct _NoSpecialCases {};

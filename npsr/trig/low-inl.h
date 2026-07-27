@@ -110,26 +110,28 @@ NPSR_INTRIN V Low(V x) {
     //   N' = N - 0.5
     n = Sub(n, Set(d, static_cast<T>(0.5)));
   }
-  // Use Cody-Waite method with triple-precision PI
+  // Cody-Waite reduction with multi-word π (3 words with FMA, 4 without)
   constexpr auto kPi = data::kPi<T, kNativeFMA>;
-
   V r = NegMulAdd(n, Set(d, kPi[0]), x_abs);
   r = NegMulAdd(n, Set(d, kPi[1]), r);
   V r_lo = NegMulAdd(n, Set(d, kPi[2]), r);
+
   if constexpr (!kNativeFMA) {
-    if (!kIsSingle) {
-      r = r_lo;
-    }
     r_lo = NegMulAdd(n, Set(d, kPi[3]), r_lo);
   }
-
-  if constexpr (kIsSingle) {
+  if constexpr (kIsSingle || !kNativeFMA) {
+    // The polynomial needs the fully reduced value; r still owes the last
+    // π word(s).
     r = r_lo;
   }
+
   V r2 = Mul(r, r);
   V poly = PolyLow<OP>(r, r2);
 
   if constexpr (!kIsSingle) {
+    // Non-FMA has r == r_lo, giving the plain r + r³·poly. With FMA this is
+    // r_lo·(1 + r²·poly) ≈ sin(r_lo): r and r_lo differ by n·π[2] (~2^-83)
+    // and sin(r)/r varies slowly, so the error stays sub-ULP.
     V r2_corr = Mul(r2, r_lo);
     poly = MulAdd(r2_corr, poly, r_lo);
   }
