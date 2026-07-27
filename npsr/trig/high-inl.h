@@ -59,21 +59,27 @@ NPSR_INTRIN V High(V x) {
   }
   auto WideCal = [](const VW &nh, const VW &xh_abs) -> VW {
     const DFromV<VW> dw;
-    constexpr auto kPiPrec35 = data::kPiPrec35<true>;
+    // Cody-Waite r = x - n*π, one word per NegMulAdd. Without FMA the product
+    // rounds, so that split spends a third word on 31-bit heads to keep n*πᵢ
+    // exact; see constants.h.sol.
+    constexpr auto kPiPrec35 = data::kPiPrec35<kNativeFMA>;
     VW r = NegMulAdd(nh, Set(dw, kPiPrec35[0]), xh_abs);
     r = NegMulAdd(nh, Set(dw, kPiPrec35[1]), r);
+    if constexpr (!kNativeFMA) {
+      r = NegMulAdd(nh, Set(dw, kPiPrec35[2]), r);
+    }
     VW r2 = Mul(r, r);
 
-    // Polynomial coefficients for sin(r) approximation on [-π/2, π/2]
-    const VW c9 = Set(dw, 0x1.5dbdf0e4c7deep-19);
-    const VW c7 = Set(dw, -0x1.9f6ffeea73463p-13);
-    const VW c5 = Set(dw, 0x1.110ed3804ca96p-7);
-    const VW c3 = Set(dw, -0x1.55554bc836587p-3);
-    VW poly = MulAdd(c9, r2, c7);
-    poly = MulAdd(r2, poly, c5);
-    poly = MulAdd(r2, poly, c3);
-    poly = Mul(poly, r2);
-    poly = MulAdd(r, poly, r);
+    // Degree-9 odd minimax for sin(r); the fit is this path's whole error
+    // budget (0.5 + 0.0965 ULP). c1 is fitted, not pinned to 1 -- same two
+    // closing ops as r + r^3*P(r^2), one more free parameter. Within 2^-27.4
+    // of 1, so sin(r) still demotes to r bit-exactly. See data/polyf32.h.sol.
+    constexpr auto kPoly = data::kSinPolyHighF32;
+    VW poly = MulAdd(Set(dw, kPoly[4]), r2, Set(dw, kPoly[3]));
+    poly = MulAdd(r2, poly, Set(dw, kPoly[2]));
+    poly = MulAdd(r2, poly, Set(dw, kPoly[1]));
+    poly = MulAdd(r2, poly, Set(dw, kPoly[0]));
+    poly = Mul(poly, r);
     return poly;
   };
 

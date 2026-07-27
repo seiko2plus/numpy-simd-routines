@@ -19,7 +19,7 @@ template <> inline constexpr double kPi<double, false>[] = {
 template <bool FMA> inline constexpr double kPiPrec35[] = {
 0x1.921fb5444p1, 0x1.68c234c4c6628p-38, };
 template <> inline constexpr double kPiPrec35<false>[] = {
-0x1.921fb6p1, -0x1.777a5cp-24, -0x1.ee59dap-49, };
+0x1.921fb544p1, 0x1.0b4611a8p-33, -0x1.d9cceba3f91f2p-65, };
 
 template <typename T> inline constexpr char kPiMul2[] = {};
 template <> inline constexpr float kPiMul2<float>[] = {

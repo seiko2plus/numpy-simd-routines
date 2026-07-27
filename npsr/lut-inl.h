@@ -7,6 +7,7 @@
 
 #include <limits>
 #include <tuple>
+#include <limits>
 
 #include "npsr/hwy.h"
 

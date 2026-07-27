@@ -1,7 +1,7 @@
 // Sollya utility functions for generating C++ header files with mathematical constants and lookup tables
 
 // Initial Sollya configuration
-prec = 512;           // High precision for accurate constant computation
+prec = 1024;           // High precision for accurate constant computation
 display = hexadecimal; // Hex display for exact bit representation
 verbosity = 4;        // Verbose output to detect NaN values
 showmessagenumbers = on;

@@ -44,12 +44,20 @@ Append(
   // rounds ~2^-105, harmless even for tiny reduced arguments near k*π/2
   "",
   
-  // Special 35-bit precision π for specific algorithms
+  // Special 35-bit precision π for the f32 High path, which reduces in double.
+  // FMA: the fused subtractions never need n*πᵢ to be representable, so two
+  // words carry the whole budget and π is held to 35+53 = 88 bits.
+  //
+  // non-FMA: NegMulAdd decays to `x - fl(n*πᵢ)`, so each n*πᵢ has to be exact.
+  // The quotient is bounded by the f32 magic-round in High(), |n| < 2^22, hence
+  // 53-22 = 31-bit heads. Two of those only pin π to 62 bits, so a 53-bit tail
+  // follows; its product rounds at ~2^-92, just under the FMA split's 2^-90
+  // residual, which is what keeps both variants on the same accuracy curve.
   "template <bool FMA> inline constexpr double kPiPrec35[] = " @
   KArray_(Float64, pi, [|RN, 35|], [|RD, 53|]),
-  
+
   "template <> inline constexpr double kPiPrec35<false>[] = " @
-  KArray_(Float64, pi, [|RN, 24, 24, 24|]),
+  KArray_(Float64, pi, [|RN, 31, 31|], [|RN, 53|]),
   "",
   
   // 2π constants for angle wrapping

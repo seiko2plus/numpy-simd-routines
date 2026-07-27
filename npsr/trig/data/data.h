@@ -8,6 +8,7 @@
 // their own guards and no-op on re-entry.
 #include "npsr/lut-inl.h"
 #include "npsr/trig/data/constants.h"
+#include "npsr/trig/data/polyf32.h"
 #include "npsr/trig/data/kpi16-inl.h"
 #include "npsr/trig/data/approx.h"
 #include "npsr/trig/data/reduction.h"

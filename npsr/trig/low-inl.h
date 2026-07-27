@@ -17,31 +17,32 @@ enum class Operation { kSin = 0, kCos = 1 };
 template <Operation OP, typename V, HWY_IF_F32(TFromV<V>)>
 NPSR_INTRIN V PolyLow(V r, V r2) {
   using namespace hn;
+  namespace data = ::npsr::trig::data;
 
   const DFromV<V> d;
   constexpr bool kCos = OP == Operation::kCos;
-  const V c9 = Set(d, kCos ? 0x1.5d866ap-19f : 0x1.5dbdfp-19f);
-  const V c7 = Set(d, kCos ? -0x1.9f6d9ep-13 : -0x1.9f6ffep-13f);
-  const V c5 = Set(d, kCos ? 0x1.110ec8p-7 : 0x1.110eccp-7f);
-  const V c3 = Set(d, -0x1.55554cp-3f);
+  // cos reduces around (N + 0.5)·π, so both ops evaluate sin(r) here; the
+  // per-op/per-mode sets differ only in pinning (see data/polyf32.h.sol).
+  constexpr auto kSet = (kCos ? data::kCosPolyLowF32<kNativeFMA>
+                              : data::kSinPolyLowF32<kNativeFMA>);
+  const V c9 = Set(d, kSet[3]);
+  const V c7 = Set(d, kSet[2]);
+  const V c5 = Set(d, kSet[1]);
+  const V c3 = Set(d, kSet[0]);
   V poly = MulAdd(c9, r2, c7);
   poly = MulAdd(r2, poly, c5);
   poly = MulAdd(r2, poly, c3);
-  if constexpr (OP == Operation::kCos) {
-    // Although this path handles cosine, we have already transformed the
-    // input using the identity: cos(x) = sin(x + π/2) This means we're no
-    // longer directly evaluating a cosine Taylor series; instead, we evaluate
-    // the sine approximation polynomial at (x + π/2).
-    //
-    // The sine approximation has the general form:
-    //    sin(r) ≈ r + r³ · P(r²)
-    //
-    // So, we compute:
-    //    r³ = r · r²
-    //    sin(r) ≈ r + r³ · poly
-    //
-    // This formulation preserves accuracy by computing the highest order
-    // terms last, which benefits from FMA to reduce rounding error.
+  // cos was mapped to sin via cos(x) = sin(x + π/2) during reduction, so all
+  // branches evaluate the same sine polynomial sin(r) ≈ r + r³ · P(r²), not a
+  // cosine series. All three build r + r³·poly in three ops; only the grouping
+  // differs. Without FMA every intermediate is rounded and r·poly lands in the
+  // lowest binade of the three, worth ~0.1 ULP. With FMA the choice is nearly
+  // free and cos measures ~0.06 ULP better in SVML's order (r³ first, matching
+  // SVML's R = X + X·X²·(...)).
+  if constexpr (!kNativeFMA) {
+    poly = Mul(r, poly);
+    poly = MulAdd(poly, r2, r);
+  } else if constexpr (kCos) {
     V r3 = Mul(r2, r);
     poly = MulAdd(r3, poly, r);
   } else {
@@ -92,13 +93,17 @@ NPSR_INTRIN V Low(V x) {
 
   constexpr bool kIsSingle = std::is_same_v<T, float>;
   // Transform cosine to sine using identity: cos(x) = sin(x + π/2)
-  const V half_pi = Set(d, data::kHalfPi<T>);
   V x_trans = x_abs;
   if constexpr (OP == Operation::kCos) {
-    x_trans = Add(x_abs, half_pi);
+    x_trans = Add(x_abs, Set(d, data::kHalfPi<T>));
   }
-  // check zero input/subnormal for cosine (cos(~0) = 1)
-  const auto is_cos_near_zero = Eq(x_trans, half_pi);
+  // cos(x) rounds to exactly 1 up to these (largest such value per type).
+  // Answering 1 directly instead of catching only x_trans == half_pi matters
+  // for correctness, not just speed: tiny x reduces to r hugging pi/2, where
+  // the poly's per-op rounding cannot land on 1.0 for every such r.
+  constexpr T kCosOneMax =
+      static_cast<T>(kIsSingle ? 0x1p-12 : 0x1.6a09e667f3bccp-27);
+  const auto is_cos_near_zero = Le(x_abs, Set(d, kCosOneMax));
 
   // Compute N = round(x/π) using "magic number" technique
   // and stores integer part in mantissa
@@ -118,10 +123,19 @@ NPSR_INTRIN V Low(V x) {
   constexpr auto kPi = data::kPi<T, kNativeFMA>;
   V r = NegMulAdd(n, Set(d, kPi[0]), x_abs);
   r = NegMulAdd(n, Set(d, kPi[1]), r);
-  V r_lo = NegMulAdd(n, Set(d, kPi[2]), r);
-
+  V r_lo;
   if constexpr (!kNativeFMA) {
-    r_lo = NegMulAdd(n, Set(d, kPi[3]), r_lo);
+    // n·π[2] is exact, so Fast2Sum recovers the π[2] rounding error into the
+    // π[3] step. 
+    const V p2 = Mul(n, Set(d, kPi[2]));
+    const V ra = Sub(r, p2);
+    const V p2_err = Sub(Sub(r, ra), p2);
+    r_lo = Sub(ra, Sub(Mul(n, Set(d, kPi[3])), p2_err));
+  } else {
+    r_lo = NegMulAdd(n, Set(d, kPi[2]), r);
+    if constexpr (!kNativeFMA) {
+      r_lo = NegMulAdd(n, Set(d, kPi[3]), r_lo);
+    }
   }
   if constexpr (kIsSingle || !kNativeFMA) {
     // The polynomial needs the fully reduced value; r still owes the last

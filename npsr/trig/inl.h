@@ -1,13 +1,12 @@
-// Main trigonometric function dispatcher for Highway SIMD library
 // This file provides the public API for sine and cosine functions with
-// configurable precision, special case handling, and algorithm selection
+// configurable precision, special case handling, and algorithm selection.
 //
-// The implementation automatically selects between three algorithms:
-// 1. Low precision: ~2-3 ULP error, fastest
-// 2. High precision: ~1 ULP error, moderate speed
-// 3. Extended precision: Payne-Hanek reduction for huge |x|
-//    (> 10^4 for float, > 2^24 for double)
-
+// The implementation automatically selects between:
+// 1. Low precision: < 2 ULP for f32 and < 3.5 ULP for f64
+// 2. High precision: < 0.6 ULP for f32, < 1 ULP for f64; moderate speed
+// 3. Extended precision: Payne-Hanek reduction for huge |x|, similar
+// accuracy to High precision but a slow path.
+//
 #if defined(NPSR_TRIG_INL_H_) == defined(HWY_TARGET_TOGGLE)  // NOLINT
 #ifdef NPSR_TRIG_INL_H_
 #undef NPSR_TRIG_INL_H_
@@ -42,11 +41,13 @@ namespace npsr::HWY_NAMESPACE::trig {
  *
  * Algorithm selection:
  * 1. If kLowAccuracy: Use Low<> (Cody-Waite with minimal polynomial)
- * 2. Otherwise: Use High<> (π/16 reduction with table lookup)
+ * 2. Otherwise: Use High<> (f32: π reduction in double; f64: π/16 reduction
+ *    with table lookup)
  * 3. If kLargeArgument and |x| > threshold: Override with Extended<>
  *
  * Thresholds for extended precision:
- * - Float: |x| > 10,000 (empirically chosen for accuracy)
+ * - Float: |x| > the largest argument the chosen path still meets its bound at
+ *   (differs per accuracy/FMA/op; see kLargeF32)
  * - Double: |x| > 2^24 (16,777,216 - beyond this the reduction's n*π products
  *   stop being exactly representable)
  */
@@ -58,12 +59,8 @@ NPSR_INTRIN V Trig(Prec &prec, V x) {
   V ret;
   // Step 1: Select base algorithm based on accuracy requirements
   if constexpr (Prec::kLowAccuracy) {
-    // Low precision: Cody-Waite reduction, degree-9 (f32) / degree-15 (f64)
-    // Error: ~2-3 ULP
     ret = Low<OP>(x);
   } else {
-    // High precision: π/16 reduction with table lookup + polynomial
-    // Error: ~1 ULP
     ret = High<OP>(x);
   }
   // Step 2: Handle special cases (NaN, Inf) if enabled
@@ -80,16 +77,26 @@ NPSR_INTRIN V Trig(Prec &prec, V x) {
   // For |x| > threshold, standard algorithms lose precision due to
   // catastrophic cancellation in x - n*π reduction
   if constexpr (Prec::kLargeArgument) {
-    // Thresholds mark where each path's n*π products stop being exact:
-    // - Float: 10,000, conservative but keeps the widened path < 1 ULP.
+    // Thresholds mark where each path stops meeting its bound, i.e. where its
+    // range reduction breaks down, not where mantissa resolution runs out:
+    // - Float: each path keeps its own accuracy bound up to a different |x|;
+    //   every constant below is the round value under the exhaustively
+    //   measured, MPFR-confirmed first argument that exceeds it. The low paths
+    //   break far earlier without FMA, because there the extra π word is spent
+    //   on keeping n*πᵢ representable rather than on headroom.
     // - Double: 2^24, past which |round(x*16/π)| overflows the π/16 split.
     // - Double low-accuracy cos: holds until trunc(|x|/π) > 8388606; the
     //   constant is the largest double below that boundary (~8388607π).
-    constexpr bool kIsLowCos =
-        Prec::kLowAccuracy && OP == trig::Operation::kCos;
+    constexpr bool kIsCos = OP == trig::Operation::kCos;
+    constexpr bool kIsLowCos = Prec::kLowAccuracy && kIsCos;
+    constexpr float kLargeF32 =
+        Prec::kLowAccuracy
+            ? (kNativeFMA ? (kIsCos ? 1600000.0f : 2200000.0f)
+                          : (kIsCos ? 12000.0f : 25000.0f))
+            : (kNativeFMA ? 200000.0f : 130000.0f);
     constexpr double kLargeF64 = kIsLowCos ? 0x1.921fb2200366fp+24 : 16777216.0;
     auto has_large_arg =
-        And(Gt(Abs(x), Set(d, kIsSingle ? 10000.0f : kLargeF64)), is_finite);
+        And(Gt(Abs(x), Set(d, kIsSingle ? kLargeF32 : kLargeF64)), is_finite);
 
     // Extended precision is expensive, only use when necessary
     if (HWY_UNLIKELY(!AllFalse(d, has_large_arg))) {
