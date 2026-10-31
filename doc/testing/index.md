@@ -41,12 +41,14 @@ see `spin --help`.
 | Option | Meaning |
 |---|---|
 | `--target avx2,sse4` | Only these targets (case-insensitive). Default: every NPSR target this CPU supports. The {ref}`reference targets <testing/api/numpy_sr.conftest:Reference targets>` run only when named. The oracle can't be selected; use `--oracle`. |
-| `--operation sin,cos` | Only these operations' tests. Default: all. |
-| `--dtype float32,float64` | Only these dtypes' tests. Default: both. |
+| `--operation sin,cos` | Only these operations' tests, the gate's books included. Default: all. |
+| `--dtype float32,float64` | Only these dtypes' tests, the gate's books included. Default: both. |
 | `--accuracy high,low` | Only these accuracy profiles (case-insensitive). Default: all. |
-| `--oracle mpfr` | The oracle the tests score against. Takes a single name, not a list. Default: `mpfr`. |
+| `--oracle mpfr` | The oracle the tests score against. Takes a single name, not a list; each oracle has its own books. Default: `mpfr`. |
 | `--seed N` | Root seed for all random data, any Python integer literal (`12345`, `0x1f`). Default: a fresh one, printed in the header and the summary. See the {py:func}`rand <numpy_sr.conftest.rand>` fixture. |
 | `-m slow`, `-m exhaustive`, `-m all` | Marker-gated tests, see {ref}`Markers <testing/api/numpy_sr.conftest:Markers>`. Comma-separated or repeated: `-m slow,exhaustive`. |
+| `--worst-dir DIR,DIR` | Directories of worst-case books the gate replays. Default: `python/tests/worst`. See {ref}`Files <testing/api/numpy_sr.conftest:Files>`. |
+| `--worst-collect DIR` | Update the worst-case books under `DIR`, see {ref}`Collecting <testing/api/numpy_sr.conftest:Collecting>`. |
 | `-t numpy_sr.tests.<module>::<test>` | Run one module, class or test. |
 | `-j N` / `-j auto` | xdist workers. |
 | `-v`, `--verbose` | Verbose output. |
@@ -59,8 +61,8 @@ Anything after `--` goes to pytest unchanged:
 spin test --target avx2 -- -k "float64" -x
 ```
 
-For details on how a run works, the reference targets, markers and
-the ULP report, see [`numpy_sr.conftest`](api/numpy_sr.conftest.md).
+For details on how a run works, the reference targets, markers, the
+worst-case book and the ULP report, see [`numpy_sr.conftest`](api/numpy_sr.conftest.md).
 
 ## Reporting
 

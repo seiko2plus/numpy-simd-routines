@@ -84,6 +84,7 @@ def _selection(pytest_args, tests, build_dir):
       spin test --target avx2,sse4
       spin test --accuracy high --seed 12345
       spin test --operation sin --dtype float32
+      spin test --worst-collect python/tests/worst
       spin test --marker slow
 
     Plain pytest options still go after `--`:
@@ -137,6 +138,18 @@ def _selection(pytest_args, tests, build_dir):
     "one runs only its tests (default: neither, both are skipped).",
 )
 @click.option(
+    "--worst-dir",
+    metavar="DIRS",
+    help="Directories of worst-case books the gate replays; comma-separated "
+    "(default: python/tests/worst).",
+)
+@click.option(
+    "--worst-collect",
+    metavar="DIR",
+    help="Write the worst-case books to DIR, which the gate replays only if it "
+    "is also a --worst-dir (default: the books are only replayed, never written).",
+)
+@click.option(
     "-j",
     "n_jobs",
     metavar="N_JOBS",
@@ -164,6 +177,8 @@ def test(
     oracle,
     seed,
     markers,
+    worst_dir,
+    worst_collect,
     n_jobs,
     tests,
     verbose,
@@ -181,6 +196,13 @@ def test(
     ):
         if value is not None:
             suite_args += [name, value]
+    # absolute, since pytest runs from site-packages; `=` keeps `_is_path`
+    # from taking them for test paths
+    if worst_dir:
+        dirs = ",".join(os.path.abspath(d) for d in worst_dir.split(",") if d)
+        suite_args.append(f"--worst-dir={dirs}")
+    if worst_collect:
+        suite_args.append(f"--worst-collect={os.path.abspath(worst_collect)}")
 
     markexpr = _markexpr(markers)
     if markexpr:

@@ -87,7 +87,7 @@ SIGNATURES: Final = _ops.SIGNATURES
 class Backend(Protocol):
     """Flags every target submodule carries, kernel or reference alike."""
 
-    #: Native FMA (``HWY_NATIVE_FMA``).
+    #: Native FMA (``HWY_NATIVE_FMA``). Selects the books.
     HAVE_FMA: bool
     #: f64 lanes (``HWY_HAVE_FLOAT64``). Without it only the f32 overload is
     #: bound.

@@ -39,6 +39,8 @@ kernel is most likely to be wrong:
 - ``test_simple``: named angles (π/6, π/4, ..., 2π), the smallest normal and
   subnormal, 10000 and 2**24 (where float32 and float64 switch to Extended),
   their ±2 ULP neighbors and both signs.
+- Through the book, every hard input found by any of these is tested on
+  every run.
 
 Both dtypes: bit-exact
 ----------------------

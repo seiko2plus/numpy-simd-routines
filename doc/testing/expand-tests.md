@@ -1,7 +1,8 @@
 # Expand tests
 
 Getting a new kernel `npsr::HWY_NAMESPACE::<Op>(prec, v)` in `npsr/` tested
-takes two phases: bind it to Python, then test it. `<op>` is the op's Python name and `<Op>` its kernel name.
+takes three phases: bind it to Python, test it, then collect its worst
+cases. `<op>` is the op's Python name and `<Op>` its kernel name.
 
 ## 1. Bind it to Python
 
@@ -14,8 +15,8 @@ passes the list to the compiler as `NPSR_OPERATIONS`), generates the op's
 TU, holding every target, from `npsr-op.tmpl.cpp`, and the typed `<op>` of
 `Target` and `Oracle` in `numpy_sr.target`.
 
-The name is the Python name and the name of the NumPy ufunc the `numpy`
-reference calls, so use the NumPy name, without `_`.
+The name is the Python name, the book directory and the name of the NumPy
+ufunc the `numpy` reference calls, so use the NumPy name, without `_`.
 `operation-inl.h` binds `sr::<Op>(prec, v...)`, one vector per input of the
 signature, so the kernel needs that signature.
 
@@ -33,7 +34,8 @@ The op's tests need at least:
 
 - a bound per accuracy and dtype;
 - accuracy tests that call `test(target.<op>, x, sr.mpfr.<op>(x), bound,
-  accuracy=...)`;
+  accuracy=...)`. The bound is stored in the book, and the gate replays the
+  book with it;
 - an `exhaustive` sweep, see [Test strategies](strategies.md);
 - bit-exact tests for what must hold exactly: specials, symmetry, tiny
   inputs, and FP flags with `sr.FPEnv`.
@@ -47,3 +49,12 @@ For a new module:
   [Test strategies](strategies.md) with an `automodule`;
 - add it to the `tests/` `install_sources` in `python/meson.build`. Tests
   that aren't installed don't run.
+
+## 3. Collect the worst cases
+
+Create the books and commit them:
+
+```sh
+spin test --worst-collect python/tests/worst -m all -j auto
+git add python/tests/worst/mpfr/<op>
+```
