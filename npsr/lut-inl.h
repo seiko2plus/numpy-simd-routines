@@ -5,6 +5,7 @@
 #define NPSR_LUT_INL_H_
 #endif
 
+#include <limits>
 #include <tuple>
 
 #include "npsr/hwy.h"

@@ -68,6 +68,8 @@ class FPExceptions {
 #else
   static constexpr auto kUnderflow = 0;
 #endif
+  // FE_INEXACT is deliberately excluded: nearly every rounded operation raises
+  // it, so it is neither saved nor restored and passes through as raised.
   static constexpr auto kAll = kInvalid | kDivByZero | kOverflow | kUnderflow;
 
   void Raise(int errors) noexcept { mask_ |= errors; }

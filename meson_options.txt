@@ -1,0 +1,3 @@
+
+option('tests', type: 'feature', value: 'auto', description: 'Build the numpy_sr test package: the pytest harness and its pybind11 extension')
+option('operation', type: 'array', value: ['sin', 'cos'], description: 'Operations to build for the tests; signatures in python/meson.build')

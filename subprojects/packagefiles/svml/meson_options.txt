@@ -1,0 +1,1 @@
+option('operation', type: 'array', value: [], yield: true, description: 'Operations to build, yielded from npsr')
