@@ -1,0 +1,68 @@
+name: build-test
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        type: string
+        required: true
+      cc:
+        type: string
+        required: true
+      cxx:
+        type: string
+        required: true
+      targets:
+        type: string
+        required: true
+      args:
+        type: string
+        default: ""
+      label:
+        type: string
+        default: ""
+      venv:
+        type: boolean
+        default: false
+
+jobs:
+  build-test:
+    name: ${{ inputs.cxx }}
+    runs-on: >-
+      ${{ inputs.label
+      && fromJSON(format('["{0}", "{1}"]', inputs.os, inputs.label))
+      || inputs.os }}
+    env:
+      CC: ${{ inputs.cc }}
+      CXX: ${{ inputs.cxx }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # v7.1.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        if: ${{ !inputs.venv }}
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: ${{ !inputs.venv }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpfr-dev
+          pip install -r test_requirements.txt
+      - name: Install dependencies
+        if: ${{ inputs.venv }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ${{ inputs.cc }} git \
+                                  pkg-config libmpfr-dev \
+                                  python3-dev python3-venv
+          python3 -m venv venv
+          venv/bin/pip install -r test_requirements.txt
+          echo "$PWD/venv/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: spin build -- ${{ inputs.args }}
+      - name: CPU features
+        run: >-
+          spin python -- -c "import numpy_sr as sr; print(sorted(
+          n for n, t in sr.targets.items() if t.IS_SUPPORTED))"
+      - name: Test
+        run: spin test -j auto --target ${{ inputs.targets }}

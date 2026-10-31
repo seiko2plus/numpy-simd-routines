@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from . import _numpy_sr, target, utils
+from . import _numpy_sr, argred, target, testing, utils
 from ._numpy_sr import Accuracy, ulp_error
 
 # Context manager over the flags-only `_numpy_sr.FPEnv`, which it shadows here.
@@ -47,9 +47,11 @@ mpfr = cast("target.Oracle", _numpy_sr.targets["mpfr"])
 __all__ = [
     "Accuracy",
     "FPEnv",
+    "argred",
     "mpfr",
     "target",
     "targets",
+    "testing",
     "ulp_error",
     "utils",
 ]

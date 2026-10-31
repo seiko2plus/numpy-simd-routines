@@ -7,10 +7,9 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
-from dataclasses import dataclass
-
 
 # ANSI color codes for terminal output
 if sys.stdout.isatty():
@@ -152,7 +151,7 @@ quit;
                 color = (
                     Colors.RED if got_error else Colors.BLUE if got_info else Colors.DIM
                 )
-                icon = "│✗" if got_error else "│ℹ" if got_info else "│"
+                icon = "│✗" if got_error else "│ℹ" if got_info else "│"  # noqa: RUF001
                 print_colored(f"{icon} {line.rstrip()}", color, indent=1)
 
             process.wait()

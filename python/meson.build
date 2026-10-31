@@ -13,15 +13,29 @@ foreach op : get_option('operation')
   operations += {op: signatures[op]}
 endforeach
 
+# install_sources flattens to basenames: tests/__init__.py would clobber the
+# package __init__.py if shared with this call, so tests get their own.
 py.install_sources(
   [
     '__init__.py',
+    'argred.py',
     'fpenv.py',
     'target.py',
+    'testing.py',
     'utils.py',
+    'conftest.py',
     '_numpy_sr.pyi',  # type stub for the compiled extension (sibling of the .so)
   ],
   subdir: 'numpy_sr',
+)
+py.install_sources(
+  [
+    'tests/__init__.py',
+    'tests/test_argred.py',
+    'tests/test_target.py',
+    'tests/test_trig.py',
+  ],
+  subdir: 'numpy_sr/tests',
 )
 subdir('_numpy_sr')
 

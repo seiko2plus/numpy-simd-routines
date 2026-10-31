@@ -7,6 +7,10 @@ version = "1.0.0.dev0"
 description = "NumPy SIMD Routines"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+# `spin test -j <n>` needs xdist; the plugin merges the workers' results itself.
+test = ["pytest", "pytest-xdist"]
+
 [tool.ruff]
 # Python style + lint: run `ruff check` and `ruff format`. 88 cols matches the
 # width the current sources are written at. Build outputs, vendored subprojects
@@ -51,6 +55,12 @@ package = "numpy_sr"
 ]
 "Codegen" = [
   ".spin/cmds.py:sollya",
+]
+"Testing" = [
+  ".spin/cmds.py:test",
+]
+"Linting" = [
+  ".spin/cmds.py:lint",
 ]
 "Environments" = [
   "spin.cmds.meson.python",
