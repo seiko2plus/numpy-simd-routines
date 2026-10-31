@@ -1,0 +1,145 @@
+/* The ULP report viewer over Tabulator's base stylesheet, on the docs
+   theme's palette so it follows the light/dark switch. */
+
+.ulp-report {
+  --page:      var(--pst-color-background);
+  --surface:   var(--pst-color-surface);
+  --ink:       var(--pst-color-text-base);
+  --ink-2:     var(--pst-color-text-muted);
+  --muted:     var(--pst-color-text-muted);
+  --grid:      var(--pst-color-border);
+  --border:    var(--pst-color-border);
+  --accent:    var(--pst-color-primary);
+  --good:      var(--pst-color-success);
+  --bad:       var(--pst-color-danger);
+  --good-wash: rgba(53, 201, 86, 0.12);
+  --bad-wash:  rgba(224, 86, 79, 0.12);
+  --mono:      var(--pst-font-family-monospace);
+  font-size: 14px;
+}
+.ulp-report .meta { color: var(--ink-2); margin: 0 0 1rem; }
+.bd-main .bd-content .bd-article-container:has(.ulp-report) { max-width: 100%; }
+
+/* ---- facet pills (filtering; keeps the table header clean) ---- */
+
+.ulp-report .filters { margin: 0 0 1rem; }
+.ulp-report .facet { display: flex; align-items: baseline; gap: 0.5rem; margin: 0.3rem 0; }
+.ulp-report .facet .name {
+  color: var(--muted); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.04em; min-width: 5.5rem;
+}
+.ulp-report .facet .pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.ulp-report .pill {
+  border: 1px solid var(--grid); border-radius: 999px;
+  background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 0.8rem; padding: 0.1rem 0.7rem; cursor: pointer;
+}
+.ulp-report .pill[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---- Tabulator: theme surface, our borders, horizontal scroll only ---- */
+
+.ulp-report .tabulator {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.ulp-report .tabulator,
+.ulp-report .tabulator .tabulator-tableholder { height: auto !important; max-height: none !important; }
+.ulp-report .tabulator .tabulator-tableholder { overflow-x: auto !important; overflow-y: hidden !important; }
+
+.ulp-report .tabulator .tabulator-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--grid);
+  color: var(--muted);
+}
+.ulp-report .tabulator .tabulator-header .tabulator-col {
+  background: var(--surface);
+  border-right: none;
+}
+.ulp-report .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 0.4rem 0.5rem; }
+.ulp-report .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 650;
+}
+.ulp-report .tabulator .tabulator-header .tabulator-col.tabulator-sortable.tabulator-col-sorter-element:hover,
+.ulp-report .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover {
+  background-color: var(--page) !important; /* match the row hover, not the base gray */
+}
+/* the arrow is 12px; Tabulator reserves 25px for it */
+.ulp-report .tabulator .tabulator-header .tabulator-col.tabulator-sortable .tabulator-col-title { padding-right: 16px; }
+.ulp-report .tabulator .tabulator-col .tabulator-arrow { border-bottom-color: var(--muted) !important; }
+.ulp-report .tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-arrow,
+.ulp-report .tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-arrow { border-bottom-color: var(--ink) !important; }
+
+.ulp-report .tabulator .tabulator-row,
+.ulp-report .tabulator .tabulator-row.tabulator-row-even { background: var(--surface); }
+.ulp-report .tabulator .tabulator-row { border-top: 1px solid var(--grid); }
+.ulp-report .tabulator .tabulator-row:first-child { border-top: none; }
+.ulp-report .tabulator .tabulator-row.tabulator-selectable:hover,
+.ulp-report .tabulator .tabulator-row.tabulator-selected:hover,
+.ulp-report .tabulator .tabulator-row:hover { background-color: var(--page) !important; }
+.ulp-report .tabulator .tabulator-row .tabulator-cell {
+  color: var(--ink);
+  border: none;
+  padding: 0.4rem 0.5rem;
+}
+.ulp-report .tabulator-cell.mono { font-family: var(--mono); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+
+/* ---- badges (fma / status) ---- */
+
+.ulp-report .badge {
+  display: inline-block;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.05rem 0.45rem;
+}
+.ulp-report .badge.pass { color: var(--good); background: var(--good-wash); }
+.ulp-report .badge.fail { color: var(--bad); background: var(--bad-wash); }
+.ulp-report .badge.fma { color: var(--ink-2); border: 1px solid var(--border); font-weight: 400; }
+
+/* ---- max-error magnitude bar ---- */
+
+.ulp-report .bar-wrap { display: flex; align-items: center; gap: 0.4rem; }
+.ulp-report .bar-wrap .mono {
+  text-align: right;
+  font-family: var(--mono); font-size: 0.9em; font-variant-numeric: tabular-nums;
+}
+.ulp-report .bar {
+  flex: none; height: 6px; width: 3rem;
+  border-radius: 4px; background: var(--grid); overflow: hidden;
+}
+.ulp-report .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.ulp-report .bar > i.over { background: var(--bad); }
+
+/* ---- expandable detail panel (value over bits, like the old viewer) ---- */
+
+.ulp-report .detail {
+  flex: 0 0 100%;
+  padding: 0.55rem 0.85rem 0.8rem;
+  background: var(--page);
+  border-top: 1px solid var(--grid);
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
+.ulp-report .detail .sub { width: 100%; border-collapse: collapse; }
+.ulp-report .detail .sub th {
+  text-align: left; color: var(--muted); font-weight: 650;
+  text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.04em;
+}
+.ulp-report .detail .sub th.num,
+.ulp-report .detail .sub td.num { text-align: right; }
+.ulp-report .detail .sub th,
+.ulp-report .detail .sub td { padding: 0.2rem 0.7rem; white-space: nowrap; vertical-align: top; }
+.ulp-report .detail .sub td { font-family: var(--mono); color: var(--ink); }
+.ulp-report .detail .v { display: block; }
+.ulp-report .detail .bits { display: block; color: var(--muted); }
+.ulp-report .detail .arg { display: block; }
+.ulp-report .detail .arg + .arg { margin-top: 0.3rem; }
+.ulp-report .detail .over td { color: var(--bad); }
+.ulp-report .detail .sub-h { color: var(--muted); margin: 0.6rem 0 0.25rem; font-family: var(--mono); }

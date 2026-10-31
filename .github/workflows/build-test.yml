@@ -66,3 +66,11 @@ jobs:
           n for n, t in sr.targets.items() if t.IS_SUPPORTED))"
       - name: Test
         run: spin test -j auto --target ${{ inputs.targets }}
+      # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: >-
+          !cancelled() && !inputs.venv &&
+          hashFiles('doc/testing/ulp-report.json') != ''
+        with:
+          name: ulp-report-${{ inputs.os }}-${{ inputs.cxx }}
+          path: doc/testing/ulp-report.json

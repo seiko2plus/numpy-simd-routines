@@ -15,3 +15,7 @@ These routines are developed outside the main NumPy repository for two primary r
 2. To speed up development by focusing on SIMD optimizations separately from the main NumPy codebase
 
 As a collection of header files, it can be easily integrated into NumPy or other numerical computing projects without build dependencies, simplifying adoption and maintenance.
+
+## Testing
+
+See [doc/testing](doc/testing/index.md).

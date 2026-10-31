@@ -7,3 +7,5 @@ __pycache__/
 /subprojects/*
 !/subprojects/*.wrap
 !/subprojects/packagefiles/
+/doc/_build/
+/doc/testing/ulp-report.json

@@ -236,6 +236,25 @@ def sollya(*, force):
     sollya.main(force=force)
 
 
+@click.command(help="📖 Build the HTML docs into doc/_build/html")
+@click.argument("sphinx_args", nargs=-1)
+@click.option("--clean", is_flag=True, help="Remove doc/_build before building")
+@_meson.build_option
+@_meson.build_dir_option
+@click.pass_context
+def docs(ctx, *, sphinx_args, clean, build, build_dir):
+    out = rootdir / "doc" / "_build"
+    if clean and out.exists():
+        shutil.rmtree(out)
+    sphinx = ("-m", "sphinx", "-M", "html", "doc", "doc/_build", "-W")
+    ctx.invoke(
+        _meson.python,
+        python_args=(*sphinx, *sphinx_args),
+        build=build,
+        build_dir=build_dir,
+    )
+
+
 # TODO: lint the C++ too (clang-format), once npsr and python/_numpy_sr are clean.
 @click.command(help="🧹 Run ruff and pyright")
 @click.option("--fix", is_flag=True, help="Apply ruff's fixes and format in place")

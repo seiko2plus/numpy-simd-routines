@@ -1,4 +1,5 @@
 """``python/conftest.py`` holds the hooks, fixtures and the target registry.
+The report has its own module in ``python/_conftest/``.
 
 A run
 -----
@@ -10,8 +11,10 @@ A run
    whatever the CLI did not select, and skips ``slow``/``exhaustive`` tests
    unless a ``-m`` was given.
 3. **Tests.** Each test computes inputs, gets the reference from the oracle and
-   passes both with the target's op to ``test``, which calls the op and
-   asserts the bound.
+   passes both with the target's op to ``test``, which calls the op,
+   attaches the result to the test's report and asserts the bound.
+4. **Finish.** The main process (the controller, under xdist) writes
+   ``doc/testing/ulp-report.json``.
 
 Terms
 -----
@@ -49,9 +52,10 @@ itself.
 Reference targets
 ~~~~~~~~~~~~~~~~~
 
-Selected next to NPSR targets (``--target avx2,numpy``), they run beside them.
-Their ULP errors never fail a test. The bit-exact tests take ``npsr``, so they
-don't run on them.
+Selected next to NPSR targets (``--target avx2,numpy``), they show up side by
+side in the ULP report. Their ULP errors are reported but never fail a test.
+The bit-exact tests take ``npsr``, so they don't
+run on them.
 
 Markers
 -------
@@ -65,18 +69,42 @@ together with spin's ``-m``.
 xdist
 -----
 
+``test`` puts its record in the test's ``user_properties``, which xdist
+ships with every report to the controller. There ``pytest_runtest_logreport``
+collects it and ``pytest_sessionfinish`` writes the file.
 ``pytest_configure_node`` sends every worker the same seed.
+
+This is the same path with or without xdist: only the main process writes,
+so there's nothing to merge from the workers.
+
+The ULP report
+--------------
+
+``pytest_sessionfinish`` writes ``doc/testing/ulp-report.json`` (outside a
+checkout, ``ulp-report.json`` in the rootdir). ``_conftest/report.py`` groups
+the records by target, operation, dtype and accuracy. Each row has the bound,
+the max and mean error, the count over the bound, a per-test breakdown and the
+10 worst inputs with their bits.
+``spin docs`` renders it on the ULP report page of the testing docs, if it
+exists. The page uses the vendored Tabulator in ``doc/_static/tabulator/``.
+
+The grouping and formatting stay in Python. The page only renders the JSON,
+so the viewer library can be replaced without touching the report.
 """
 
 # Absolute imports: `spin test` runs pytest --pyargs from site-packages.
 
 import argparse
+import json
+import pathlib
+import time
 import zlib
 from typing import cast
 
 import numpy as np
 import numpy_sr as sr
 import pytest
+from numpy_sr._conftest.report import serialize
 
 
 class _Reference:
@@ -115,6 +143,7 @@ TARGETS: dict = (
 )
 ACCURACIES = {a.name.lower(): a for a in sr.Accuracy}
 OPERATIONS = list(sr.target.OPERATIONS)
+_PROPS: list = []  # the user_properties of every call report
 
 # Skipped unless opted into with `-m`.
 _MARKERS = {
@@ -190,6 +219,15 @@ def _seed(arg: str) -> int:
         raise argparse.ArgumentTypeError(f"not an integer: {arg!r}") from None
 
 
+def _source_root(config: pytest.Config) -> pathlib.Path:
+    """The repository root, not site-packages."""
+    # `spin test` roots pytest in site-packages; walk up to the source ancestor.
+    start = pathlib.Path(config.rootpath)
+    return next(
+        (p for p in (start, *start.parents) if (p / "python/tests").is_dir()), start
+    )
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     for axis, (choices, default) in _ARG_DEFAULT.items():
         names = [n for n, v in choices.items() if v in default]
@@ -217,6 +255,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    _PROPS.clear()  # from an earlier session in this process
     for name, doc in _MARKERS.items():
         config.addinivalue_line("markers", f"{name}: {doc}")
     wi = getattr(config, "workerinput", None)
@@ -228,7 +267,7 @@ def pytest_configure(config: pytest.Config) -> None:
         config.issue_config_time_warning(
             pytest.PytestConfigWarning(
                 "xdist controller is not running the numpy_sr plugin: workers "
-                "seed independently"
+                "seed independently, and the ULP report is not kept"
             ),
             stacklevel=2,
         )
@@ -290,10 +329,33 @@ def pytest_report_header(config: pytest.Config) -> list:
     ]
 
 
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    if report.when == "call":  # every phase carries the same properties
+        _PROPS.extend(report.user_properties)
+
+
 def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
     terminalreporter.write_sep("-", "selection")
     for line in pytest_report_header(config):
         terminalreporter.write_line(line)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    config = session.config
+    if hasattr(config, "workerinput"):  # its reports carry everything
+        return
+    records = [v for n, v in _PROPS if n == "npsr_record"]
+    if records:
+        head = {
+            "seed": config.getoption("--seed"),
+            "oracle": _oracle_name(config),
+            "created": time.time(),
+        }
+        text = json.dumps(head | serialize(records), indent=2)
+        out = _source_root(config) / "doc/testing"
+        if not out.is_dir():  # not run from a checkout
+            out = config.rootpath
+        (out / "ulp-report.json").write_text(text)
 
 
 # optionalhook: the specs live in xdist, which need not be installed.
@@ -370,13 +432,13 @@ def rand(request: pytest.FixtureRequest) -> sr.utils.Rand:
 
 @pytest.fixture
 def test(request: pytest.FixtureRequest):
-    """`sr.testing.assert_max_ulp` bound to the test.
+    """`sr.testing.assert_max_ulp` bound to the session's report.
 
     Every accuracy test goes through it. Returns ``check(func, args, ref,
     maxulp, *, accuracy)``, which calls
     ``func(*args, accuracy=accuracy)``, builds a record with
     `sr.testing.measure` (size, max and mean error, count over the bound, the
-    16 worst inputs), asserts the bound
+    16 worst inputs), adds it to the session's report, asserts the bound
     (references only record) and returns ``func``'s output.
 
     - ``func``: an op of a target, ``target.sin``; the target and the
@@ -410,6 +472,7 @@ def test(request: pytest.FixtureRequest):
             accuracy=accuracy.name,
             operation=operation,
         )
+        node.user_properties.append(("npsr_record", record))
         # A reference target is not the oracle: recorded, not asserted.
         if not target.IS_REFERENCE:
             sr.testing.check(record)

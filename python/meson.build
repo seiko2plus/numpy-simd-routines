@@ -28,10 +28,19 @@ py.install_sources(
   ],
   subdir: 'numpy_sr',
 )
+# install_sources flattens to basenames, so _conftest gets its own subdir.
+py.install_sources(
+  [
+    '_conftest/__init__.py',
+    '_conftest/report.py',
+  ],
+  subdir: 'numpy_sr/_conftest',
+)
 py.install_sources(
   [
     'tests/__init__.py',
     'tests/test_argred.py',
+    'tests/test_report.py',
     'tests/test_target.py',
     'tests/test_trig.py',
   ],
